@@ -3,6 +3,8 @@ package main
 import (
 	"fmt"
 	"log"
+	"time"
+	"strconv"
 	"net/http"
 
 	"github.com/gorilla/mux"
@@ -34,7 +36,7 @@ var (
 			//Buckets: prometheus.DefBuckets,
 			Buckets: []float64{.25, .5, 1, 2.5, 5, 10},
 		},
-		[]string{},
+		[]string{"handler"},
 	)
 
 	responseSize = prometheus.NewHistogramVec(
@@ -48,9 +50,17 @@ var (
 	)
 
 	helloChain = promhttp.InstrumentHandlerInFlight(inFlightGauge,
-		promhttp.InstrumentHandlerDuration(requestDuration,
+		promhttp.InstrumentHandlerDuration(requestDuration.MustCurryWith(prometheus.Labels{"handler": "hello"}),
 		promhttp.InstrumentHandlerCounter(counter,
 			promhttp.InstrumentHandlerResponseSize(responseSize, SayHello()),
+			),
+		),
+	)
+
+	timeChain = promhttp.InstrumentHandlerInFlight(inFlightGauge,
+		promhttp.InstrumentHandlerDuration(requestDuration.MustCurryWith(prometheus.Labels{"handler": "time"}),
+		promhttp.InstrumentHandlerCounter(counter,
+			promhttp.InstrumentHandlerResponseSize(responseSize, Time()),
 			),
 		),
 	)
@@ -71,6 +81,7 @@ func main() {
 	router := mux.NewRouter()
 	router.Handle("/hello", helloChain)
 	router.Handle("/hello/{name}", helloChain)
+	router.Handle("/time/{seconds}", timeChain)
 	router.Handle("/metrics", promhttp.Handler())
 	log.Fatal(http.ListenAndServe(":8080", router))
 }
@@ -97,3 +108,23 @@ func SayHello() http.HandlerFunc {
 		}
 	}
 }
+
+func Time() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		code := http.StatusBadRequest // if req is not GET
+		if r.Method == "GET" {
+			code = http.StatusOK
+			vars := mux.Vars(r)
+			seconds, _ := strconv.Atoi(vars["seconds"])
+
+		    log.Println(r.URL.Path + " - 200 - Time " + string(seconds))
+			time.Sleep(time.Duration(seconds) * time.Second)
+			greet := fmt.Sprintf("Wasted %v seconds.\n", seconds)
+
+			w.Write([]byte(greet))
+		} else {
+			w.WriteHeader(code)
+		}
+	}
+}
+
