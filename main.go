@@ -31,21 +31,24 @@ var (
 		prometheus.HistogramOpts{
         	Name:    "hello_request_duration_seconds",
         	Help:    "Time (in seconds) spent serving HTTP requests.",
-        	Buckets: prometheus.DefBuckets,
+			//Buckets: prometheus.DefBuckets,
+			Buckets: []float64{.25, .5, 1, 2.5, 5, 10},
 		},
-		[]]string{"handler", "method"})
-	
+		[]string{},
+	)
+
 	responseSize = prometheus.NewHistogramVec(
 		prometheus.HistogramOpts{
 			Name:    "hello_response_size_bytes",
 			Help:    "A histogram of response sizes for requests.",
+			//Buckets: prometheus.DefBuckets,
 			Buckets: []float64{200, 500, 900, 1500},
 		},
 		[]string{},
 	)
 
 	helloChain = promhttp.InstrumentHandlerInFlight(inFlightGauge,
-		promhttp.InstrumentHandlerDuration(requestDuration.MustCurryWith(prometheus.Labels{"handler": "hello"}),
+		promhttp.InstrumentHandlerDuration(requestDuration,
 		promhttp.InstrumentHandlerCounter(counter,
 			promhttp.InstrumentHandlerResponseSize(responseSize, SayHello()),
 			),
