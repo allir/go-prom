@@ -34,7 +34,7 @@ var (
 			//Buckets: prometheus.DefBuckets,
 			Buckets: []float64{.25, .5, 1, 2.5, 5, 10},
 		},
-		[]string{},
+		[]string{"code", "method"},
 	)
 
 	responseSize = prometheus.NewHistogramVec(
