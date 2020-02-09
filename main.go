@@ -74,23 +74,21 @@ func MonitoringMiddleware(next http.Handler) http.Handler {
 		start := time.Now()
 		log.Println("I'm in your middleware")
 
-		// AHA!
+		inFlightGauge.Inc()
+		defer func() {
+			inFlightGauge.Dec()
+			// This counter may be unneeded as the request duration histogram also has a counter
+			counter.WithLabelValues(strconv.Itoa(http.StatusOK), r.Method).Inc()
+		}()
+
 		defer func() {
 			duration := time.Since(start)
-			requestDuration.With(prometheus.Labels{"code": strconv.Itoa(http.StatusOK), "method": r.Method}).Observe(duration.Seconds())
+			requestDuration.WithLabelValues(strconv.Itoa(http.StatusOK), r.Method).Observe(duration.Seconds())
 			log.Printf("The requuest took %f seconds tos serve", duration.Seconds())
 		}()
 
-		//responseSize.httpResponseSizeHistogram.Observe(float64(sizeBytes))
-
-		//inFlightGauge.httpRequestsInflight.Add(float64(quantity))
-
-		//func (r recorder) ObserveHTTPResponseSize(_ context.Context, p metrics.HTTPReqProperties, sizeBytes int64) {
-		//	r.httpResponseSizeHistogram.WithLabelValues(p.Service, p.ID, p.Method, p.Code).Observe(float64(sizeBytes))
-		//}
-		//
-		//func (r recorder) AddInflightRequests(_ context.Context, p metrics.HTTPProperties, quantity int) {
-		//	r.httpRequestsInflight.WithLabelValues(p.Service, p.ID).Add(float64(quantity))
+		// How to get the byte size of the responese
+		//responseSize.WithLabelValues(strconv.Itoa(http.StatusOK), r.Method).Observe(float64(sizeBytes))
 
 		// Call the next handler, which can be another middleware in the chain, or the final handler.
 		next.ServeHTTP(w, r)
