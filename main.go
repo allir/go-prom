@@ -16,9 +16,10 @@ import (
 
 
 var (
-	inFlightGauge = promauto.NewGauge(prometheus.GaugeOpts{
-		Name: "hello_requests_in_flight",
-		Help: "A gauge of requests currently being served by the wrapped handler.",
+	inFlightGauge = promauto.NewGauge(
+		prometheus.GaugeOpts{
+			Name: "hello_requests_in_flight",
+			Help: "A gauge of requests currently being served by the wrapped handler.",
 	})
 
 	counter = promauto.NewCounterVec(
@@ -26,7 +27,7 @@ var (
 			Name: "hello_requests_total",
 			Help: "A counter for requests to the wrapped handler.",
 		},
-		[]string{"code", "method"},
+		[]string{"handler", "code", "method"},
 	)
 
 	requestDuration = promauto.NewHistogramVec(
@@ -36,7 +37,7 @@ var (
 			//Buckets: prometheus.DefBuckets,
 			Buckets: []float64{.25, .5, 1, 2.5, 5, 10},
 		},
-		[]string{"code", "method"},
+		[]string{"handler", "code", "method"},
 	)
 
 	responseSize = promauto.NewHistogramVec(
@@ -46,16 +47,17 @@ var (
 			//Buckets: prometheus.DefBuckets,
 			Buckets: []float64{200, 500, 900, 1500},
 		},
-		[]string{},
+		[]string{"handler", "code", "method"},
 	)
 
-	helloChain = promhttp.InstrumentHandlerInFlight(inFlightGauge,
-		promhttp.InstrumentHandlerDuration(requestDuration,
-			promhttp.InstrumentHandlerCounter(counter,
-				promhttp.InstrumentHandlerResponseSize(responseSize, SayHello()),
-			),
-		),
-	)
+	// Middleware replaces this chain
+	//helloChain = promhttp.InstrumentHandlerInFlight(inFlightGauge,
+	//	promhttp.InstrumentHandlerDuration(requestDuration,
+	//		promhttp.InstrumentHandlerCounter(counter,
+	//			promhttp.InstrumentHandlerResponseSize(responseSize, SayHello()),
+	//		),
+	//	),
+	//)
 )
 
 //func init() {
@@ -70,20 +72,19 @@ var (
 
 func MonitoringMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Do stuff here
 		start := time.Now()
 		log.Println("I'm in your middleware")
 
 		inFlightGauge.Inc()
 		defer func() {
+			handler := r.URL.Path
+			code := strconv.Itoa(http.StatusOK)
 			inFlightGauge.Dec()
 			// This counter may be unneeded as the request duration histogram also has a counter
-			counter.WithLabelValues(strconv.Itoa(http.StatusOK), r.Method).Inc()
-		}()
+			counter.WithLabelValues(handler, code, r.Method).Inc()
 
-		defer func() {
 			duration := time.Since(start)
-			requestDuration.WithLabelValues(strconv.Itoa(http.StatusOK), r.Method).Observe(duration.Seconds())
+			requestDuration.WithLabelValues(handler, code, r.Method).Observe(duration.Seconds())
 			log.Printf("The requuest took %f seconds tos serve", duration.Seconds())
 		}()
 
